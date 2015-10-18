@@ -1,0 +1,5 @@
+name = Send Message
+description = Simple module for send message from site
+core = 7.x
+package = Custom module
+files[] = sendmessage.module

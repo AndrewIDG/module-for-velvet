@@ -1,0 +1,157 @@
+<?php
+
+/* 
+ * @file
+ * Simple module for send message from site
+ * 
+ * Control points:
+ * start dev at 10.00 pm 18.10.2015
+ * end dev at 00.00 am 19.10.2015
+ * end debug at 2.33 am 19.10.2015
+ */
+
+/*
+ * Create basic part of page through modulename_form function 
+ */
+function sendmessage_form(){
+    $form['to'] = array(
+        '#type' => 'textfield',
+        '#title' => t('To'),
+        '#description' => t('Enter valid e-mail please'),
+        '#required' => TRUE,
+    );
+    $form['subject'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Subject'),
+        '#required' => TRUE,
+    );
+    $form['body'] = array(
+        '#type' => 'textarea',
+        '#title' => t('Body'),
+        '#required' => TRUE,
+    );
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Send'),
+    );
+    return $form;
+}
+
+/*
+ * Validate form
+ */
+function sendmessage_form_validate($form, &$form_state){
+    $mail = $form_state['values']['to'];
+    if (!valid_email_address($mail)){
+        form_set_error('to', t('Field To is not valid e-mail'));
+    }
+}
+
+/*
+ * Submit form
+ */
+function sendmessage_form_submit($form, &$form_state){
+     //function send e-mail
+    sendmessage_mail_send($form_state['values']);    
+}
+
+/*
+ * Create page callback with ajax link
+ */
+function sendmessage_render_link(){
+    drupal_add_library('system', 'drupal.ajax');
+    $explanation = t("If you want send message click the link bellow");
+    $output = "<div>" . $explanation . "</div>";
+    $link = l(t('Open message form'), 'sendmessage_link_callback/nojs', array('attributes' => array('class' => array('use-ajax'))));
+    $output .= "<div>$link</div><div id='myDiv'></div>";
+    return $output;
+}
+
+/**
+ * Callback for sendmessage_link
+ */
+function sendmessage_link_response($type = 'ajax') {
+  if ($type == 'ajax') {
+    $output = drupal_render(drupal_get_form('sendmessage_form'));
+    //list($form, $form_state) = ajax_get_form();
+    drupal_process_form('sendmessage_form', $form, $form_state);
+    $commands = array();
+    $commands[] = ajax_command_append('#myDiv', $output);
+    $page = array('#type' => 'ajax', '#commands' => $commands);
+    ajax_deliver($page);
+  }
+  else {
+    $output = t('Some text');//drupal_render(drupal_get_form('sendmessage_form'));
+    return $output;
+  }
+}
+
+/*
+ * Implements hook_menu()
+ * Create all routings
+ */
+function sendmessage_menu(){
+    
+    $items['sendmessage'] = array (
+        'title' => 'Send your message',
+        'description' => 'You may send message from this page',
+        'page callback' => 'sendmessage_render_link',
+        'access callback' => TRUE,
+        'type' => MENU_SUGGESTED_ITEM,
+    );
+    /*
+     * $items['sendmessage'] = array (
+        'title' => 'Send your message',
+        'description' => 'You may send message from this page',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('sendmessage_form'),
+        'access callback' => TRUE,
+        'type' => MENU_SUGGESTED_ITEM,
+    );
+     */
+    $items['sendmessage_link_callback'] = array(
+        'page callback' => 'sendmessage_link_response',
+        'access callback' => 'user_access',
+        'access arguments' => array('access content'),
+        'type' => MENU_CALLBACK,
+      );
+    return $items;
+}
+
+/*
+ * Implements hook_mail_alter()
+ * Alter e-mail messages
+ */
+function sendmessage_mail_alter(&$message){
+    if (isset($params['attachment'])) {
+        $message['params']['attachments'][] = $params['attachment'];
+    }
+}
+
+/**
+ * Sends an e-mail.
+ */
+function sendmessage_mail_send($form_values) {
+    $attachment = array(
+        'filecontent' => file_get_contents(drupal_get_path('module', 'sendmessage').'/sendmessage.txt'),
+        'filename' => 'sendmessage.txt',
+        'filemime' => 'text/plain',  
+    );
+    $module = 'sendmessage';
+    $key = 'message_form';
+    $to = $form_values['to'];
+    $from = variable_get('site_mail', 'admin@example.com');
+    $params = $form_values;
+    $params['attachment'] = $attachment;
+    //dpm($params);
+    $language = language_default();
+    $send = TRUE;
+    $result = drupal_mail($module, $key, $to, $language, $params, $from, $send);
+    if ($result['result'] == TRUE) {
+        
+        drupal_set_message(t('Your message has been sent.'));
+    }
+    else {
+      drupal_set_message(t('There was a problem sending your message and it was not sent.'), 'error');
+    }
+}
